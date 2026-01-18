@@ -5,20 +5,15 @@ package com.entgldb.network.security
  */
 interface IPeerHandshakeService {
     /**
-     * Performs handshake as a client.
-     * Returns the encryption key if successful, null otherwise.
+     * Performs a secure handshake over the given input and output streams.
+     * @param input Stream to read from.
+     * @param output Stream to write to.
+     * @param isInitiator True if this node initiated the connection (Client), False otherwise (Server).
+     * @return CipherState containing the derived session keys.
      */
-    suspend fun performClientHandshake(
-        send: suspend (ByteArray) -> Unit,
-        receive: suspend () -> ByteArray
-    ): ByteArray?
-
-    /**
-     * Performs handshake as a server.
-     * Returns the encryption key if successful, null otherwise.
-     */
-    suspend fun performServerHandshake(
-        send: suspend (ByteArray) -> Unit,
-        receive: suspend () -> ByteArray
-    ): ByteArray?
+    suspend fun performHandshake(
+        input: java.io.InputStream,
+        output: java.io.OutputStream,
+        isInitiator: Boolean
+    ): CipherState
 }

@@ -138,9 +138,18 @@ fun MainScreen(
                                             address = Address(city = "Android City")
                                         )
                                         
-                                        // TODO: Save to database
-                                        val json = Json.encodeToString(user)
-                                        appendLog("Saved '$keyText' to 'users'")
+                                        // Save to database (Manual Put: Document + Oplog)
+                                        val jsonOne = com.entgldb.core.common.JsonHelpers.json.encodeToString(user)
+                                        val content = com.entgldb.core.common.JsonHelpers.parse(jsonOne)
+                                        val timestamp = com.entgldb.core.HlcTimestamp(System.currentTimeMillis(), 0, app.nodeId)
+                                        
+                                        val doc = com.entgldb.core.Document("users", user.id, content, timestamp, false)
+                                        app.peerStore.saveDocument(doc)
+                                        
+                                        val oplog = com.entgldb.core.OplogEntry("users", user.id, com.entgldb.core.OperationType.Put, content, timestamp)
+                                        app.peerStore.appendOplogEntry(oplog)
+
+                                        appendLog("Saved '${user.name}' to 'users'")
                                         
                                         keyText = ""
                                         valueText = ""
@@ -163,8 +172,13 @@ fun MainScreen(
                                             return@launch
                                         }
                                         
-                                        // TODO: Load from database
-                                        appendLog("Key '$keyText' not found (not implemented yet)")
+                                        // Load from database
+                                        val doc = app.peerStore.getDocument("users", keyText)
+                                        if (doc != null && !doc.isDeleted) {
+                                            appendLog("Loaded: ${doc.content}")
+                                        } else {
+                                            appendLog("Key '$keyText' not found")
+                                        }
                                     } catch (e: Exception) {
                                         appendLog("Error: ${e.message}")
                                     }
@@ -204,7 +218,17 @@ fun MainScreen(
                                             age = 20 + i,
                                             address = Address(city = "SpamTown")
                                         )
-                                        // TODO: Save to database
+                                        
+                                        // Manual Put
+                                        val jsonOne = com.entgldb.core.common.JsonHelpers.json.encodeToString(user)
+                                        val content = com.entgldb.core.common.JsonHelpers.parse(jsonOne)
+                                        val timestamp = com.entgldb.core.HlcTimestamp(System.currentTimeMillis(), 0, app.nodeId)
+                                        
+                                        val doc = com.entgldb.core.Document("users", user.id, content, timestamp, false)
+                                        app.peerStore.saveDocument(doc)
+                                        val oplog = com.entgldb.core.OplogEntry("users", user.id, com.entgldb.core.OperationType.Put, content, timestamp)
+                                        app.peerStore.appendOplogEntry(oplog)
+
                                         appendLog("Spammed: $key")
                                         kotlinx.coroutines.delay(100)
                                     }
@@ -219,8 +243,8 @@ fun MainScreen(
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
-                                    // TODO: Query database
-                                    appendLog("Total Users: 0 (not implemented yet)")
+                                    val count = app.peerStore.countDocuments("users", null)
+                                    appendLog("Total Users: $count")
                                 }
                             },
                             modifier = Modifier.weight(1f)

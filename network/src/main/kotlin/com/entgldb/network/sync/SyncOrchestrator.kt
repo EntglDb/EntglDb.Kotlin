@@ -3,6 +3,7 @@ package com.entgldb.network.sync
 import android.util.Log
 import com.entgldb.network.discovery.UdpDiscoveryService
 import com.entgldb.network.models.NodeAddress
+import com.entgldb.network.proto.*
 import kotlinx.coroutines.*
 
 /**
@@ -11,7 +12,10 @@ import kotlinx.coroutines.*
  */
 class SyncOrchestrator(
     private val discovery: UdpDiscoveryService,
-    private val client: TcpPeerClient
+    private val client: TcpPeerClient,
+    private val store: com.entgldb.core.storage.IPeerStore,
+    private val nodeId: String,
+    private val authToken: String
 ) {
     companion object {
         private const val TAG = "SyncOrchestrator"
@@ -68,7 +72,7 @@ class SyncOrchestrator(
             peersToSync.forEach { peer ->
                 launch {
                     try {
-                        syncWithPeer(peer.address)
+                        syncWithPeer(peer.nodeId, peer.address)
                     } catch (e: Exception) {
                         Log.e(TAG, "Sync error with ${peer.nodeId}", e)
                     }
@@ -77,17 +81,133 @@ class SyncOrchestrator(
         }
     }
 
-    private suspend fun syncWithPeer(address: String) {
+    private suspend fun syncWithPeer(peerNodeId: String, address: String) {
         val nodeAddress = NodeAddress.parse(address)
-        val socket = client.connect(nodeAddress) ?: return
+        Log.i(TAG, "Connecting to peer $peerNodeId at ${nodeAddress.host}:${nodeAddress.port}...")
+        
+        val channel = runCatching {
+            client.connect(nodeAddress)
+        }.getOrElse { 
+            Log.w(TAG, "Failed to connect to $peerNodeId: ${it.message}")
+            return
+        }
+        
+        if (channel == null) {
+            Log.w(TAG, "Connection returned null channel for $peerNodeId")
+            return
+        }
 
-        socket.use {
-            // TODO: Implement sync protocol
-            // 1. Send our latest timestamp
-            // 2. Receive oplog entries
-            // 3. Apply to local store
+        try {
+            // 1. Application Layer Handshake
+            Log.d(TAG, "Performing Application Handshake with $peerNodeId...")
+            val handshakeReq = HandshakeRequest.newBuilder()
+                .setNodeId(nodeId)
+                .setAuthToken(authToken)
+                .build()
             
-            Log.d(TAG, "Sync completed with $address")
+            channel.sendMessage(MessageType.HandshakeReq, handshakeReq)
+            
+            val (type, payload) = channel.readMessage()
+            if (type != MessageType.HandshakeRes) {
+                Log.e(TAG, "Handshake failed. Expected HandshakeRes, got $type")
+                return
+            }
+            
+            val handshakeRes = HandshakeResponse.parseFrom(payload)
+            if (!handshakeRes.accepted) {
+                Log.e(TAG, "Handshake rejected by peer")
+                return
+            }
+
+            Log.i(TAG, "Handshake successful with $peerNodeId")
+
+            // 2. Get Clock (HLC)
+            val clockReq = GetClockRequest.getDefaultInstance()
+            channel.sendMessage(MessageType.GetClockReq, clockReq)
+            
+            val (clockType, clockPayload) = channel.readMessage()
+            if (clockType != MessageType.ClockRes) {
+                 Log.e(TAG, "Expected ClockRes, got $clockType")
+                 return
+            }
+            
+            val clockRes = ClockResponse.parseFrom(clockPayload)
+            
+            Log.d(TAG, "Peer HLC: Wall=${clockRes.hlcWall}, Logic=${clockRes.hlcLogic}")
+
+            // 3. Pull Changes (From Peer -> Me)
+            // Ask for changes since OUR latest timestamp
+            val localHlc = store.getLatestTimestamp()
+            val pullReq = PullChangesRequest.newBuilder()
+                .setSinceWall(localHlc.physicalTime)
+                .setSinceLogic(localHlc.logicalCounter)
+                .setSinceNode(localHlc.nodeId)
+                .build()
+
+            channel.sendMessage(MessageType.PullChangesReq, pullReq)
+
+            val (pullType, pullPayload) = channel.readMessage()
+            if (pullType != MessageType.ChangeSetRes) {
+                 Log.e(TAG, "Expected ChangeSetRes, got $pullType")
+                 return
+            }
+
+            val changeSet = ChangeSetResponse.parseFrom(pullPayload)
+            if (changeSet.entriesCount > 0) {
+                Log.i(TAG, "Received ${changeSet.entriesCount} changes from peer")
+                
+                val oplogEntries = changeSet.entriesList.map { proto ->
+                     com.entgldb.core.OplogEntry(
+                         collection = proto.collection,
+                         key = proto.key,
+                         operation = com.entgldb.core.OperationType.valueOf(proto.operation),
+                         payload = if (proto.jsonData.isNotEmpty()) com.entgldb.core.common.JsonHelpers.parse(proto.jsonData) else null,
+                         timestamp = com.entgldb.core.HlcTimestamp(proto.hlcWall, proto.hlcLogic, proto.hlcNode)
+                     )
+                }
+                
+                store.applyRemoteChanges(oplogEntries)
+            } else {
+                Log.d(TAG, "No new changes from peer")
+            }
+
+            // 4. Push Changes (Me -> Peer)
+            // Send changes since THEIR latest timestamp
+            val peerHlc = com.entgldb.core.HlcTimestamp(clockRes.hlcWall, clockRes.hlcLogic, clockRes.hlcNode)
+            val changesToPush = store.getOplogAfter(peerHlc)
+            
+            if (changesToPush.isNotEmpty()) {
+                Log.i(TAG, "Pushing ${changesToPush.size} changes to peer")
+                
+                val pushReqBuilder = PushChangesRequest.newBuilder()
+                changesToPush.forEach { entry ->
+                    pushReqBuilder.addEntries(
+                        ProtoOplogEntry.newBuilder()
+                            .setCollection(entry.collection)
+                            .setKey(entry.key)
+                            .setOperation(entry.operation.name)
+                            .setJsonData(entry.payload?.toString() ?: "")
+                            .setHlcWall(entry.timestamp.physicalTime)
+                            .setHlcLogic(entry.timestamp.logicalCounter)
+                            .setHlcNode(entry.timestamp.nodeId)
+                            .build()
+                    )
+                }
+                
+                channel.sendMessage(MessageType.PushChangesReq, pushReqBuilder.build())
+                
+                val (ackType, ackPayload) = channel.readMessage()
+                if (ackType == MessageType.AckRes) {
+                    Log.d(TAG, "Push acknowledged")
+                } else {
+                    Log.w(TAG, "Expected AckRes, got $ackType")
+                }
+            }
+
+            Log.i(TAG, "Sync cycle completed with ${nodeAddress}")
+
+        } catch (e: Exception) {
+             Log.e(TAG, "Sync protocol error with $address", e)
         }
     }
 }

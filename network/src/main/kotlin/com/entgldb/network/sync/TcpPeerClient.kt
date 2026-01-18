@@ -22,9 +22,9 @@ class TcpPeerClient(
 
     /**
      * Connects to a peer and performs handshake.
-     * Returns the connected socket if successful, null otherwise.
+     * Returns the established SecureChannel if successful, null otherwise.
      */
-    suspend fun connect(address: NodeAddress): Socket? {
+    suspend fun connect(address: NodeAddress): SecureChannel? {
         return withContext(Dispatchers.IO) {
             try {
                 val socket = Socket()
@@ -33,75 +33,30 @@ class TcpPeerClient(
                     CONNECT_TIMEOUT_MS
                 )
 
-                val input = DataInputStream(socket.getInputStream())
-                val output = DataOutputStream(socket.getOutputStream())
+                val input = socket.getInputStream()
+                val output = socket.getOutputStream()
 
-                // Perform handshake if security is enabled
-                val encryptionKey = if (handshakeService != null) {
-                    handshakeService.performClientHandshake(
-                        send = { data ->
-                            output.writeInt(data.size)
-                            output.write(data)
-                            output.flush()
-                        },
-                        receive = {
-                            val len = input.readInt()
-                            val buffer = ByteArray(len)
-                            input.readFully(buffer)
-                            buffer
-                        }
-                    )
-                } else {
-                    null
-                }
+                // Perform handshake
+                val cipherState = handshakeService?.performHandshake(input, output, isInitiator = true)
 
-                if (handshakeService != null && encryptionKey == null) {
+                if (handshakeService != null && cipherState == null) {
                     Log.w(TAG, "Handshake failed with $address")
                     socket.close()
                     return@withContext null
                 }
 
                 Log.i(TAG, "Connected to peer at $address")
-                socket
+                
+                SecureChannel(
+                    input, 
+                    output, 
+                    encryptKey = cipherState?.encryptKey, 
+                    decryptKey = cipherState?.decryptKey
+                )
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to connect to $address", e)
                 null
-            }
-        }
-    }
-
-    /**
-     * Sends data to a peer.
-     */
-    suspend fun send(socket: Socket, data: ByteArray) {
-        withContext(Dispatchers.IO) {
-            try {
-                val output = DataOutputStream(socket.getOutputStream())
-                output.writeInt(data.size)
-                output.write(data)
-                output.flush()
-            } catch (e: Exception) {
-                Log.e(TAG, "Send error", e)
-                throw e
-            }
-        }
-    }
-
-    /**
-     * Receives data from a peer.
-     */
-    suspend fun receive(socket: Socket): ByteArray {
-        return withContext(Dispatchers.IO) {
-            try {
-                val input = DataInputStream(socket.getInputStream())
-                val len = input.readInt()
-                val buffer = ByteArray(len)
-                input.readFully(buffer)
-                buffer
-            } catch (e: Exception) {
-                Log.e(TAG, "Receive error", e)
-                throw e
             }
         }
     }

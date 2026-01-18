@@ -15,5 +15,6 @@ data class TodoItem(
     val id: String = UUID.randomUUID().toString(),  // lowercase for merge strategy compatibility
     val task: String = "",
     val completed: Boolean = false,
+    @kotlinx.serialization.SerialName("created_at")
     val createdAt: Long = System.currentTimeMillis()
 )

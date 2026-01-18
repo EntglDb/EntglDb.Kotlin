@@ -8,7 +8,8 @@ Welcome to the documentation for **EntglDb Kotlin**, a decentralized, offline-fi
 
 ## Active Versions
 
-*   [**v0.1.0-alpha (Latest)**](v0.1.0/getting-started.html) - Initial alpha release with Network, Persistence, and Security modules.
+*   [**v0.2.0-alpha (Latest)**](v0.2.0/getting-started.html) - Android Robustness (Foreground Service), Recursive Merge, and API Reference.
+*   [v0.1.0-alpha](v0.1.0/getting-started.html) - Initial alpha release with Network, Persistence, and Security modules.
 
 ## Features
 

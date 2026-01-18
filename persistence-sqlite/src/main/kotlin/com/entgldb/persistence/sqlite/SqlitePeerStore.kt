@@ -32,7 +32,7 @@ class SqlitePeerStore(
     
     override val changesApplied: Flow<List<String>> = _changesApplied.asSharedFlow()
 
-    private val json = Json { ignoreUnknownKeys = true }
+    // private val json = Json { ignoreUnknownKeys = true } // Use JsonHelpers.json
 
     override suspend fun saveDocument(document: Document) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
@@ -151,18 +151,25 @@ class SqlitePeerStore(
                     saveDocumentInternal(db, mergedDoc)
                 }
 
-                // Append to Oplog regardless of outcome (to track history) or only if applied? 
-                // C# impl appends it always to keep history consistent with what we saw.
+                // Only append to oplog if we actually applied it? 
+                // Or if it's new information.
+                // For now, consistent with existing logic: append.
                 appendOplogEntryInternal(db, entry)
             }
             db.setTransactionSuccessful()
             
             // Emit changed collections
             val changedCollections = documents.map { it.collection } + oplogEntries.map { it.collection }
-            _changesApplied.emit(changedCollections.distinct())
+            if (changedCollections.isNotEmpty()) {
+                _changesApplied.emit(changedCollections.distinct())
+            }
         } finally {
             db.endTransaction()
         }
+    }
+
+    override suspend fun applyRemoteChanges(changes: List<OplogEntry>) {
+        applyBatch(emptyList(), changes)
     }
 
     override suspend fun queryDocuments(
@@ -255,7 +262,7 @@ class SqlitePeerStore(
         val hlcLogic = cursor.getInt(4)
         val hlcNode = cursor.getString(5)
         
-        val content = if (jsonData != null) json.parseToJsonElement(jsonData) else JsonObject(emptyMap())
+        val content = if (jsonData != null) com.entgldb.core.common.JsonHelpers.json.parseToJsonElement(jsonData) else JsonObject(emptyMap())
         
         return Document(collection, key, content, HlcTimestamp(hlcWall, hlcLogic, hlcNode), isDeleted)
     }
@@ -269,7 +276,7 @@ class SqlitePeerStore(
         val hlcLogic = cursor.getInt(5)
         val hlcNode = cursor.getString(6)
         
-        val payload = if (jsonData != null) json.parseToJsonElement(jsonData) else null
+        val payload = if (jsonData != null) com.entgldb.core.common.JsonHelpers.json.parseToJsonElement(jsonData) else null
 
         return OplogEntry(collection, key, operation, payload, HlcTimestamp(hlcWall, hlcLogic, hlcNode))
     }

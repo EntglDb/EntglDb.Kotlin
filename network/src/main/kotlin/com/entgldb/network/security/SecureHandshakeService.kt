@@ -1,120 +1,72 @@
 package com.entgldb.network.security
 
-import android.util.Base64
 import android.util.Log
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
-import java.security.KeyPair
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.InputStream
+import java.io.OutputStream
+import com.entgldb.network.sync.readFully
 
 /**
- * Secure handshake service implementing ECDH key exchange with authentication.
+ * Secure handshake service implementing ECDH key exchange compatible with EntglDb.Net.
  */
-class SecureHandshakeService(
-    private val authToken: String
-) : IPeerHandshakeService {
+class SecureHandshakeService : IPeerHandshakeService {
     
     companion object {
         private const val TAG = "SecureHandshake"
     }
 
-    override suspend fun performClientHandshake(
-        send: suspend (ByteArray) -> Unit,
-        receive: suspend () -> ByteArray
-    ): ByteArray? {
-        try {
-            // Generate EC key pair
-            val keyPair = CryptoHelper.generateEcKeyPair()
-            val challenge = CryptoHelper.randomBytes(32)
+    override suspend fun performHandshake(
+        input: InputStream,
+        output: OutputStream,
+        isInitiator: Boolean
+    ): CipherState {
+        return withContext(Dispatchers.IO) {
+            Log.d(TAG, "Starting Secure Handshake. Initiator: $isInitiator")
             
-            // Send HELLO
-            val hello = HandshakeMessage(
-                type = "HELLO",
-                publicKey = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP),
-                challenge = Base64.encodeToString(challenge, Base64.NO_WRAP)
-            )
-            send(Json.encodeToString(hello).toByteArray())
+            // 1. Generate Ephemeral Keys
+            val keyPair = CryptoHelper.generateEcdhKeyPair()
+            val myPublicKey = CryptoHelper.encodePublicKey(keyPair.public) // 65 bytes
             
-            // Receive WELCOME
-            val welcomeBytes = receive()
-            val welcome = Json.decodeFromString<HandshakeMessage>(String(welcomeBytes))
+            // 2. Exchange Public Keys
+            Log.d(TAG, "Sending my Public Key (${myPublicKey.size} bytes)")
             
-            if (welcome.type != "WELCOME") {
-                Log.e(TAG, "Expected WELCOME, got ${welcome.type}")
-                return null
+            // Write my key
+            output.write(myPublicKey)
+            output.flush()
+            
+            // Read peer key
+            val peerPublicKeyBytes = ByteArray(65)
+            Log.d(TAG, "Waiting for Peer Public Key...")
+            try {
+                input.readFully(peerPublicKeyBytes)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read Peer Public Key", e)
+                throw e
             }
+            Log.d(TAG, "Received Peer Public Key")
             
-            // Derive shared secret
-            val peerPublicKey = Base64.decode(welcome.publicKey, Base64.NO_WRAP)
-            val sharedSecret = CryptoHelper.deriveSharedSecret(keyPair.private, peerPublicKey)
-            val aesKey = CryptoHelper.deriveAesKey(sharedSecret, authToken.toByteArray())
+            val peerPublicKey = CryptoHelper.decodePublicKey(peerPublicKeyBytes)
             
-            // Verify challenge response
-            val expectedResponse = CryptoHelper.hmacSha256(challenge, aesKey)
-            val actualResponse = Base64.decode(welcome.challengeResponse, Base64.NO_WRAP)
+            // 3. Compute Shared Secret
+            val sharedSecret = CryptoHelper.computeSharedSecret(keyPair.private, peerPublicKey)
+            Log.d(TAG, "Shared Secret computed (${sharedSecret.size} bytes)")
             
-            if (!expectedResponse.contentEquals(actualResponse)) {
-                Log.e(TAG, "Challenge response verification failed")
-                return null
-            }
+            // 4. Derive Keys (HKDF-ish)
+            // .NET Impl uses simple SHA256 expansion:
+            // Initiator Encrypts with Key derived from 0x00, Decrypts with 0x01
+            // Responder Encrypts with Key derived from 0x01, Decrypts with 0x00
             
-            Log.i(TAG, "Client handshake successful")
-            return aesKey
+            val encryptInfo = if (isInitiator) 0x00.toByte() else 0x01.toByte()
+            val decryptInfo = if (isInitiator) 0x01.toByte() else 0x00.toByte()
             
-        } catch (e: Exception) {
-            Log.e(TAG, "Client handshake failed", e)
-            return null
+            val encryptKey = CryptoHelper.deriveKey(sharedSecret, encryptInfo)
+            val decryptKey = CryptoHelper.deriveKey(sharedSecret, decryptInfo)
+            
+            Log.i(TAG, "Handshake Completed. Keys derived.")
+            Log.v(TAG, "EncryptKey: ${encryptKey.joinToString("") { "%02x".format(it).take(4) }}...") // Log partial key for debug
+            
+            CipherState(encryptKey, decryptKey)
         }
     }
-
-    override suspend fun performServerHandshake(
-        send: suspend (ByteArray) -> Unit,
-        receive: suspend () -> ByteArray
-    ): ByteArray? {
-        try {
-            // Receive HELLO
-            val helloBytes = receive()
-            val hello = Json.decodeFromString<HandshakeMessage>(String(helloBytes))
-            
-            if (hello.type != "HELLO") {
-                Log.e(TAG, "Expected HELLO, got ${hello.type}")
-                return null
-            }
-            
-            // Generate EC key pair
-            val keyPair = CryptoHelper.generateEcKeyPair()
-            
-            // Derive shared secret
-            val peerPublicKey = Base64.decode(hello.publicKey, Base64.NO_WRAP)
-            val sharedSecret = CryptoHelper.deriveSharedSecret(keyPair.private, peerPublicKey)
-            val aesKey = CryptoHelper.deriveAesKey(sharedSecret, authToken.toByteArray())
-            
-            // Compute challenge response
-            val challenge = Base64.decode(hello.challenge, Base64.NO_WRAP)
-            val challengeResponse = CryptoHelper.hmacSha256(challenge, aesKey)
-            
-            // Send WELCOME
-            val welcome = HandshakeMessage(
-                type = "WELCOME",
-                publicKey = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP),
-                challengeResponse = Base64.encodeToString(challengeResponse, Base64.NO_WRAP)
-            )
-            send(Json.encodeToString(welcome).toByteArray())
-            
-            Log.i(TAG, "Server handshake successful")
-            return aesKey
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Server handshake failed", e)
-            return null
-        }
-    }
-
-    @Serializable
-    private data class HandshakeMessage(
-        val type: String,
-        val publicKey: String = "",
-        val challenge: String = "",
-        val challengeResponse: String = ""
-    )
 }

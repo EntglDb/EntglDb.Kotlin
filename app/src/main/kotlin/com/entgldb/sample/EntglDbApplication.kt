@@ -40,24 +40,46 @@ class EntglDbApplication : Application() {
         
         // Initialize peer store
         val dbPath = getDatabasePath("entgldb-android.db").absolutePath
-        peerStore = SqlitePeerStore(this, dbPath)
+        val resolver = com.entgldb.core.sync.RecursiveMergeConflictResolver()
+        peerStore = SqlitePeerStore(this, dbPath, resolver)
         
         // Initialize network components
-        val handshakeService = SecureHandshakeService(AUTH_TOKEN)
-        val tcpServer = TcpSyncServer(nodeId, 0, handshakeService)
-        val discovery = UdpDiscoveryService(nodeId, 0, useLocalhost = false)
+        val handshakeService = SecureHandshakeService()
+        val tcpServer = TcpSyncServer(nodeId, 0, handshakeService, peerStore)
+        val discovery = UdpDiscoveryService(this, nodeId, 0, useLocalhost = false)
         val client = TcpPeerClient(handshakeService)
-        val orchestrator = SyncOrchestrator(discovery, client)
+        val orchestrator = SyncOrchestrator(discovery, client, peerStore, nodeId, AUTH_TOKEN)
         
         node = EntglDbNode(tcpServer, discovery, orchestrator)
         node.start()
         
         Log.d(TAG, "EntglDb initialized successfully on ${node.address}")
+
+        // Bind and start Foreground Service to keep node alive
+        val intent = android.content.Intent(this, com.entgldb.network.service.EntglDbService::class.java)
+        bindService(intent, connection, BIND_AUTO_CREATE)
+    }
+    
+    private val connection = object : android.content.ServiceConnection {
+        override fun onServiceConnected(className: android.content.ComponentName, service: android.os.IBinder) {
+            val binder = service as com.entgldb.network.service.EntglDbService.LocalBinder
+            val entglDbService = binder.getService()
+            entglDbService.setNode(node)
+            
+            // Promote to Foreground Service
+            val startIntent = android.content.Intent(this@EntglDbApplication, com.entgldb.network.service.EntglDbService::class.java)
+            startIntent.action = com.entgldb.network.service.EntglDbService.ACTION_START
+            startService(startIntent)
+        }
+
+        override fun onServiceDisconnected(arg0: android.content.ComponentName) {
+        }
     }
     
     override fun onTerminate() {
         super.onTerminate()
         node.stop()
+        unbindService(connection)
     }
     
     companion object {

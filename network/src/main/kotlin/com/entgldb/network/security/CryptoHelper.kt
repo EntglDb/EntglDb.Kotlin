@@ -108,7 +108,45 @@ object CryptoHelper {
     }
 
     /**
+     * Computes SHA-256 hash.
+     */
+    fun sha256(data: ByteArray): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(data)
+    }
+
+    /**
      * Generates random bytes.
      */
     fun randomBytes(size: Int): ByteArray = Random.nextBytes(size)
+    /**
+     * Alias for generateEcKeyPair.
+     */
+    fun generateEcdhKeyPair() = generateEcKeyPair()
+
+    /**
+     * Encodes public key to X.509 format.
+     */
+    fun encodePublicKey(key: PublicKey): ByteArray = key.encoded
+
+    /**
+     * Decodes X.509 public key.
+     */
+    fun decodePublicKey(bytes: ByteArray): PublicKey {
+        val keyFactory = KeyFactory.getInstance("EC")
+        val spec = X509EncodedKeySpec(bytes)
+        return keyFactory.generatePublic(spec)
+    }
+
+    /**
+     * Alias for deriveSharedSecret.
+     */
+    fun computeSharedSecret(privateKey: PrivateKey, publicKey: PublicKey) = deriveSharedSecret(privateKey, publicKey.encoded)
+
+    /**
+     * Derives a key using the specific info byte (used as salt for HKDF extract in this simplified version).
+     */
+    fun deriveKey(sharedSecret: ByteArray, info: Byte): ByteArray {
+        return deriveAesKey(sharedSecret, byteArrayOf(info))
+    }
 }

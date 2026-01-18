@@ -73,3 +73,4 @@ message SecureEnvelope {
   bytes nonce = 2;      // IV or Nonce
   bytes auth_tag = 3;   // HMAC or Auth Tag if using AEAD (optional if concatenated)
 }
+

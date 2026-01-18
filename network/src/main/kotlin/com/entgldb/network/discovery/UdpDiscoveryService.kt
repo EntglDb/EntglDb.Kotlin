@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Broadcasts presence beacons and listens for other nodes on the local network.
  */
 class UdpDiscoveryService(
+    private val context: android.content.Context,
     private val nodeId: String,
     private var tcpPort: Int,
     private val useLocalhost: Boolean = false
@@ -39,9 +40,10 @@ class UdpDiscoveryService(
 
     /**
      * Starts the discovery service, initiating listener, broadcaster, and cleanup tasks.
+     * Can be called to resume after pause().
      */
     fun start() {
-        if (discoveryJob != null) return
+        if (discoveryJob != null && discoveryJob?.isActive == true) return
         
         discoveryJob = scope.launch {
             launch { listenForBeacons() }
@@ -53,11 +55,26 @@ class UdpDiscoveryService(
     }
 
     /**
-     * Stops the discovery service.
+     * Pauses discovery (stops network activity) but keeps state.
      */
-    fun stop() {
+    fun pause() {
         discoveryJob?.cancel()
         discoveryJob = null
+        Log.i(TAG, "UDP Discovery paused")
+    }
+
+    /**
+     * Resumes discovery.
+     */
+    fun resume() {
+        start()
+    }
+
+    /**
+     * Stops the discovery service permanently.
+     */
+    fun stop() {
+        pause()
         scope.cancel()
         Log.i(TAG, "UDP Discovery stopped")
     }
@@ -82,13 +99,15 @@ class UdpDiscoveryService(
                     socket.receive(packet)
                     
                     val json = String(packet.data, 0, packet.length)
+                    Log.v(TAG, "Received beacon raw: $json from ${packet.address}") 
+                    
                     try {
-                        val beacon = Json.decodeFromString<DiscoveryBeacon>(json)
+                        val beacon = com.entgldb.core.common.JsonHelpers.json.decodeFromString<DiscoveryBeacon>(json)
                         if (beacon.nodeId != nodeId) {
                             handleBeacon(beacon, packet.address)
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to parse beacon from ${packet.address}: ${e.message}")
+                        Log.w(TAG, "Failed to parse beacon from ${packet.address}. Json: $json. Error: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
@@ -108,16 +127,23 @@ class UdpDiscoveryService(
             }
             
             val beacon = DiscoveryBeacon(nodeId, tcpPort)
-            val json = Json.encodeToString(beacon)
+            val json = com.entgldb.core.common.JsonHelpers.json.encodeToString(beacon)
             val bytes = json.toByteArray()
-            val broadcastAddress = InetAddress.getByName("255.255.255.255")
-            val packet = DatagramPacket(bytes, bytes.size, broadcastAddress, DISCOVERY_PORT)
             
             Log.i(TAG, "UDP Broadcasting started for $nodeId")
             
             try {
                 while (coroutineContext.isActive) {
+                     // Recalculate each time in case network changes (though less efficient, safer)
+                    val broadcastAddress = getBroadcastAddress() ?: InetAddress.getByName("255.255.255.255")
+                    val packet = DatagramPacket(bytes, bytes.size, broadcastAddress, DISCOVERY_PORT)
+
+                    Log.v(TAG, "Broadcasting beacon to ${broadcastAddress.hostAddress}: $json")
                     socket.send(packet)
+                    
+                    // Fallback removed as requested implicitly by reverting to "back" state,
+                    // but keeping safe broadcastAddress calculation logic.
+                    
                     delay(BROADCAST_INTERVAL_MS)
                 }
             } catch (e: Exception) {
@@ -175,7 +201,24 @@ class UdpDiscoveryService(
 
     @Serializable
     private data class DiscoveryBeacon(
-        val nodeId: String,
-        val tcpPort: Int
+        @kotlinx.serialization.SerialName("node_id") val nodeId: String,
+        @kotlinx.serialization.SerialName("tcp_port") val tcpPort: Int
     )
+
+    private fun getBroadcastAddress(): InetAddress? {
+        try {
+            val wifiManager = context.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            val dhcp = wifiManager?.dhcpInfo ?: return null
+            
+            val broadcast = (dhcp.ipAddress and dhcp.netmask) or dhcp.netmask.inv()
+            val quizzes = ByteArray(4)
+            for (k in 0..3) {
+                quizzes[k] = (broadcast shr k * 8 and 0xFF).toByte()
+            }
+            return InetAddress.getByAddress(quizzes)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to calculate broadcast address: ${e.message}")
+            return null
+        }
+    }
 }

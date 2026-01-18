@@ -14,6 +14,7 @@ interface IPeerStore {
     suspend fun appendOplogEntry(entry: OplogEntry)
     suspend fun getOplogAfter(timestamp: HlcTimestamp): List<OplogEntry>
     suspend fun getLatestTimestamp(): HlcTimestamp
+    suspend fun applyRemoteChanges(changes: List<OplogEntry>)
 
     suspend fun applyBatch(documents: List<Document>, oplogEntries: List<OplogEntry>)
 

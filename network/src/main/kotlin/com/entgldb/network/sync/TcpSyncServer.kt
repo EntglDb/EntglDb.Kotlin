@@ -14,7 +14,8 @@ import java.net.Socket
 class TcpSyncServer(
     private val nodeId: String,
     private val port: Int,
-    private val handshakeService: IPeerHandshakeService?
+    private val handshakeService: IPeerHandshakeService?,
+    private val store: com.entgldb.core.storage.IPeerStore
 ) {
     companion object {
         private const val TAG = "TcpSyncServer"
@@ -70,34 +71,47 @@ class TcpSyncServer(
         withContext(Dispatchers.IO) {
             try {
                 socket.use { client ->
-                    val input = DataInputStream(client.getInputStream())
-                    val output = DataOutputStream(client.getOutputStream())
+                    val input = client.getInputStream()
+                    val output = client.getOutputStream()
 
                     // Perform handshake if security is enabled
-                    val encryptionKey = if (handshakeService != null) {
-                        handshakeService.performServerHandshake(
-                            send = { data -> output.write(data); output.flush() },
-                            receive = {
-                                val len = input.readInt()
-                                val buffer = ByteArray(len)
-                                input.readFully(buffer)
-                                buffer
-                            }
-                        )
-                    } else {
-                        null
-                    }
+                    val cipherState = handshakeService?.performHandshake(input, output, isInitiator = false)
 
-                    if (handshakeService != null && encryptionKey == null) {
+                    if (handshakeService != null && cipherState == null) {
                         Log.w(TAG, "Handshake failed with ${client.inetAddress}")
                         return@use
                     }
 
-                    Log.i(TAG, "Client connected: ${client.inetAddress}")
+                    Log.i(TAG, "Client handshake complete: ${client.inetAddress}")
 
-                    // TODO: Handle sync protocol messages
-                    // For now, just keep connection alive briefly
-                    delay(1000)
+                    // Establish Secure Channel
+                    val channel = SecureChannel(
+                        input, 
+                        output, 
+                        encryptKey = cipherState?.encryptKey,
+                        decryptKey = cipherState?.decryptKey
+                    )
+
+                    val processor = SyncMessageProcessor(store, nodeId)
+
+                    // Message Loop
+                    while (isActive) {
+                        try {
+                            val (type, payload) = channel.readMessage()
+                            
+                            val response = processor.process(type, payload)
+                            if (response != null) {
+                                val (resType, resMsg) = response
+                                channel.sendMessage(resType, resMsg as com.google.protobuf.MessageLite)
+                            } else {
+                                Log.w(TAG, "Processor returned no response for $type")
+                            }
+                            
+                        } catch (e: java.io.EOFException) {
+                            Log.i(TAG, "Client disconnected: ${client.inetAddress}")
+                            break
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Client handler error", e)
