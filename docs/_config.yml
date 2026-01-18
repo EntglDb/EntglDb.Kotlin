@@ -1,0 +1,5 @@
+title: "EntglDb Kotlin Documentation"
+description: A decentralized, offline-first peer-to-peer database for Android and Kotlin.
+theme: jekyll-theme-cayman
+plugins:
+  - jekyll-seo-tag
