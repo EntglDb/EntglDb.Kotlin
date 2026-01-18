@@ -45,7 +45,7 @@ jobs:
         OSSRH_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
         SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-      run: ./gradlew publishReleasePublicationToMavenRepository
+      run: ./gradlew publishReleasePublicationToOSSRHRepository
       
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
