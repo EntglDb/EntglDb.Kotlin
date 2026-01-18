@@ -42,6 +42,12 @@ dependencies {
     
     implementation("androidx.core:core-ktx:1.12.0")
 
+    // implementation("org.brotli:dec:0.1.2") 
+    implementation("com.aayushatharva.brotli4j:brotli4j:1.16.0")
+    implementation("com.aayushatharva.brotli4j:native-windows-x86_64:1.16.0") // Dev/Test support
+    implementation("com.aayushatharva.brotli4j:native-linux-x86_64:1.16.0")
+    implementation("com.aayushatharva.brotli4j:native-osx-x86_64:1.16.0")
+
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
 }

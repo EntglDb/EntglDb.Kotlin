@@ -2,6 +2,9 @@ package com.entgldb.network.sync
 
 import android.util.Log
 import com.entgldb.network.security.IPeerHandshakeService
+import com.entgldb.network.proto.MessageType
+import com.entgldb.network.proto.HandshakeRequest
+import com.entgldb.network.proto.HandshakeResponse
 import kotlinx.coroutines.*
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -99,6 +102,26 @@ class TcpSyncServer(
                         try {
                             val (type, payload) = channel.readMessage()
                             
+                            if (type == MessageType.HandshakeReq) {
+                                val hReq = com.entgldb.network.proto.HandshakeRequest.parseFrom(payload)
+                                Log.d(TAG, "Received HandshakeReq from ${hReq.nodeId}")
+                                
+                                val hResBuilder = com.entgldb.network.proto.HandshakeResponse.newBuilder()
+                                    .setNodeId(nodeId)
+                                    .setAccepted(true)
+                                
+                                // Negotiation
+                                if (hReq.supportedCompressionList.contains("brotli") && CompressionHelper.isBrotliSupported) {
+                                    hResBuilder.setSelectedCompression("brotli")
+                                    channel.useCompression = true
+                                    Log.i(TAG, "Negotiated Brotli compression with ${hReq.nodeId}")
+                                }
+                                
+                                val hRes = hResBuilder.build()
+                                channel.sendMessage(MessageType.HandshakeRes, hRes)
+                                continue
+                            }
+
                             val response = processor.process(type, payload)
                             if (response != null) {
                                 val (resType, resMsg) = response

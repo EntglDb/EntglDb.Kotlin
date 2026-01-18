@@ -2,7 +2,7 @@
 
 A decentralized, offline-first peer-to-peer database for Kotlin/JVM and Android.
 
-[![Version](https://img.shields.io/badge/version-0.2.1--alpha-orange)](https://github.com/EntglDb/EntglDb.Kotlin/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/EntglDb/EntglDb.Kotlin/releases)
 
 ## Project Structure (Gradle Multi-Project)
 
@@ -44,8 +44,9 @@ This is a **pure Kotlin rewrite** using Kotlin Multiplatform for:
 
 ## Protocol Compatibility
 
-Protocol Version: **1.0**  
-Compatible with: EntglDb.NET v0.6+, EntglDb.NodeJs v0.1+
+Protocol Version: **v4**
+Compatible with: EntglDb.NET v0.7.0
+Features: Brotli compression, Secure Handshake, Gossip.
 
 ## License
 

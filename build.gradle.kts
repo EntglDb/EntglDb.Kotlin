@@ -7,7 +7,7 @@ plugins {
 
 allprojects {
     group = "com.entgldb"
-    version = "0.1.0"
+    version = "0.7.0"
     
     repositories {
         google()

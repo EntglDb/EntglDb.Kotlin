@@ -1,3 +1,15 @@
+v0.7.0:
+  - title: Getting Started
+    url: /v0.7.0/getting-started.html
+  - title: Architecture
+    url: /v0.7.0/architecture.html
+  - title: Security & Sync
+    url: /v0.7.0/security-and-sync.html
+  - title: Android Robustness
+    url: /v0.7.0/android-robustness.html
+  - title: API Reference
+    url: /v0.7.0/api-reference.html
+
 v0.2.0:
   - title: Getting Started
     url: /v0.2.0/getting-started.html

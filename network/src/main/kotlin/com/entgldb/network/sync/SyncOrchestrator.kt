@@ -100,12 +100,15 @@ class SyncOrchestrator(
         try {
             // 1. Application Layer Handshake
             Log.d(TAG, "Performing Application Handshake with $peerNodeId...")
-            val handshakeReq = HandshakeRequest.newBuilder()
+            val handshakeReqBuilder = HandshakeRequest.newBuilder()
                 .setNodeId(nodeId)
                 .setAuthToken(authToken)
-                .build()
             
-            channel.sendMessage(MessageType.HandshakeReq, handshakeReq)
+            if (CompressionHelper.isBrotliSupported) {
+                handshakeReqBuilder.addSupportedCompression("brotli")
+            }
+
+            channel.sendMessage(MessageType.HandshakeReq, handshakeReqBuilder.build())
             
             val (type, payload) = channel.readMessage()
             if (type != MessageType.HandshakeRes) {
@@ -117,6 +120,11 @@ class SyncOrchestrator(
             if (!handshakeRes.accepted) {
                 Log.e(TAG, "Handshake rejected by peer")
                 return
+            }
+            
+            if (handshakeRes.selectedCompression == "brotli") {
+                channel.useCompression = true
+                Log.i(TAG, "Negotatied Brotli compression with $peerNodeId")
             }
 
             Log.i(TAG, "Handshake successful with $peerNodeId")
