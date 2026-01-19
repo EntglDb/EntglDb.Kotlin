@@ -25,7 +25,7 @@ jobs:
       run: chmod +x gradlew
     
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build -x test
     
     - name: Run tests
       run: ./gradlew test
@@ -37,6 +37,49 @@ jobs:
         name: test-results
         path: '**/build/test-results/**/*.xml'
 
+    - name: Upload build artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-outputs
+        path: |
+          **/build/outputs/
+          **/build/reports/
+          **/build/logs/
+
+    - name: Validate Maven Central secrets
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "Validating required secrets for Maven Central publishing..."
+        MISSING_SECRETS=""
+        
+        if [ -z "${{ secrets.MAVEN_CENTRAL_USERNAME }}" ]; then
+          echo "❌ MAVEN_CENTRAL_USERNAME secret is missing"
+          MISSING_SECRETS="MAVEN_CENTRAL_USERNAME "
+        fi
+        
+        if [ -z "${{ secrets.MAVEN_CENTRAL_PASSWORD }}" ]; then
+          echo "❌ MAVEN_CENTRAL_PASSWORD secret is missing"
+          MISSING_SECRETS="${MISSING_SECRETS}MAVEN_CENTRAL_PASSWORD "
+        fi
+        
+        if [ -z "${{ secrets.SIGNING_KEY }}" ]; then
+          echo "❌ SIGNING_KEY secret is missing"
+          MISSING_SECRETS="${MISSING_SECRETS}SIGNING_KEY "
+        fi
+        
+        if [ -z "${{ secrets.SIGNING_PASSWORD }}" ]; then
+          echo "❌ SIGNING_PASSWORD secret is missing"
+          MISSING_SECRETS="${MISSING_SECRETS}SIGNING_PASSWORD "
+        fi
+        
+        if [ -n "$MISSING_SECRETS" ]; then
+          echo "::error::Missing required secrets: $MISSING_SECRETS"
+          exit 1
+        fi
+        
+        echo "✅ All required secrets are present"
+
     - name: Publish to Maven Central
       if: startsWith(github.ref, 'refs/tags/')
       # Skip running tests again, just publish
@@ -45,7 +88,11 @@ jobs:
         OSSRH_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
         SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-      run: ./gradlew publishReleasePublicationToOSSRHRepository
+      run: |
+        echo "Verifying publish configuration..."
+        ./gradlew publishReleasePublicationToOSSRHRepository --dry-run
+        echo "Publishing to Maven Central..."
+        ./gradlew publishReleasePublicationToOSSRHRepository
       
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1

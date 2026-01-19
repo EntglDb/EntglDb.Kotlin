@@ -7,7 +7,7 @@ plugins {
 
 allprojects {
     group = "com.entgldb"
-    version = "0.7.0"
+    version = findProperty("VERSION_NAME") as String? ?: "0.0.1-SNAPSHOT"
     
     repositories {
         google()
