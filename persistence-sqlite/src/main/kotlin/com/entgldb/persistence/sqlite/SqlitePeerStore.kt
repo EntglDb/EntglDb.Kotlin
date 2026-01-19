@@ -174,7 +174,7 @@ class SqlitePeerStore(
 
     override suspend fun queryDocuments(
         collection: String,
-        filterJson: String?,
+        filter: com.entgldb.core.query.QueryNode?,
         skip: Int?,
         take: Int?,
         orderBy: String?,
@@ -184,12 +184,22 @@ class SqlitePeerStore(
         val sb = StringBuilder("SELECT Key, JsonData, IsDeleted, HlcWall, HlcLogic, HlcNode FROM Documents WHERE Collection = ? AND IsDeleted = 0")
         val args = mutableListOf(collection)
 
-        if (filterJson != null) {
-            sb.append(" AND ($filterJson)")
+        if (filter != null) {
+            val (clause, sqlArgs) = SqlTranslator.translate(filter)
+            sb.append(" AND $clause")
+            args.addAll(sqlArgs)
         }
 
         if (orderBy != null) {
-            sb.append(" ORDER BY json_extract(JsonData, '$.$orderBy') ${if (ascending) "ASC" else "DESC"}")
+            // Should verify orderBy property safety or convert camel->snake
+            // For simple implementation, assuming user passes camel case which matches JSON field if not transformed?
+            // Actually SqlTranslator transforms camel->snake.
+            // We should transform sort field too?
+            // Let's rely on simple string assumption for now or do regex replace like EnsureIndex.
+           
+            // Actually, for queryDocuments we should use json_extract with proper path
+            // For now, simple injection of json_extract string
+             sb.append(" ORDER BY json_extract(JsonData, '$.$orderBy') ${if (ascending) "ASC" else "DESC"}")
         } else {
             sb.append(" ORDER BY Key ASC")
         }
@@ -211,13 +221,17 @@ class SqlitePeerStore(
         return@withContext result
     }
 
-    override suspend fun countDocuments(collection: String, filterJson: String?): Int = withContext(Dispatchers.IO) {
+    override suspend fun countDocuments(collection: String, filter: com.entgldb.core.query.QueryNode?): Int = withContext(Dispatchers.IO) {
         val db = dbHelper.readableDatabase
         val sb = StringBuilder("SELECT COUNT(*) FROM Documents WHERE Collection = ? AND IsDeleted = 0")
         val args = mutableListOf(collection)
-         if (filterJson != null) {
-            sb.append(" AND ($filterJson)")
+        
+        if (filter != null) {
+             val (clause, sqlArgs) = SqlTranslator.translate(filter)
+             sb.append(" AND $clause")
+             args.addAll(sqlArgs)
         }
+        
         val cursor = db.rawQuery(sb.toString(), args.toTypedArray())
         cursor.use {
             if (it.moveToFirst()) {

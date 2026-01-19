@@ -20,14 +20,14 @@ interface IPeerStore {
 
     suspend fun queryDocuments(
         collection: String, 
-        filterJson: String? = null,
+        filter: com.entgldb.core.query.QueryNode? = null,
         skip: Int? = null,
         take: Int? = null,
         orderBy: String? = null,
         ascending: Boolean = true
     ): List<Document>
 
-    suspend fun countDocuments(collection: String, filterJson: String? = null): Int
+    suspend fun countDocuments(collection: String, filter: com.entgldb.core.query.QueryNode? = null): Int
 
     suspend fun getCollections(): List<String>
     suspend fun ensureIndex(collection: String, propertyPath: String)

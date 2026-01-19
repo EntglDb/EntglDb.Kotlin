@@ -8,7 +8,7 @@ Welcome to the documentation for **EntglDb Kotlin**, a decentralized, offline-fi
 
 ## Active Versions
 
-*   [**v0.7.0 (Latest)**](v0.7.0/getting-started.html) - Added Brotli Compression, Protocol v4, and Secure Handshake Negotiation.
+*   [**v0.7.0 (Latest)**](https://www.entgldb.com/docs/v0.7.0) - *Hosted on EntglDb.com*
 *   [v0.2.0-alpha](v0.2.0/getting-started.html) - Android Robustness (Foreground Service), Recursive Merge, and API Reference.
 *   [v0.1.0-alpha](v0.1.0/getting-started.html) - Initial alpha release with Network, Persistence, and Security modules.
 

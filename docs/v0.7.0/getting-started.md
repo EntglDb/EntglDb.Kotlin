@@ -97,9 +97,10 @@ println("Listening on port: ${node.server.listeningPort}")
 
 ### Save and Query Data
 
-*Document CRUD operations coming soon in next alpha...*
+See the [Querying Documentation](querying.html) for detailed examples of CRUD operations and the new Query DSL.
 
 ## 4. Next Steps
 
 *   Explore [Architecture](architecture.html)
+*   Learn about [Querying](querying.html)
 *   View [API Reference](api-reference.html)
