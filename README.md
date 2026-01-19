@@ -40,7 +40,6 @@ A decentralized, offline-first peer-to-peer database for Kotlin/JVM and Android.
 This is a **pure Kotlin rewrite** using Kotlin Multiplatform for:
 - JVM servers
 - Android apps  
-- (Future) Kotlin/Native for iOS
 
 ## Protocol Compatibility
 
