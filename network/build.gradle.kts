@@ -3,8 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.protobuf")
     kotlin("plugin.serialization")
-    id("maven-publish")
-    id("signing")
+    id("com.vanniktech.maven.publish")
 }
 
 android {
@@ -48,6 +47,3 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
 }
-
-// Apply publishing configuration
-apply(from = "${rootProject.projectDir}/scripts/publish-module.gradle.kts")
