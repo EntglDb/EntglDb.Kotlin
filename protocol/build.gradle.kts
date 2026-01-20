@@ -2,8 +2,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("com.google.protobuf")
-    id("maven-publish")
-    id("signing")
+    id("com.vanniktech.maven.publish")
 }
 
 android {
@@ -59,6 +58,3 @@ protobuf {
 dependencies {
     implementation("com.google.protobuf:protobuf-javalite:3.25.1")
 }
-
-// Apply publishing configuration
-apply(from = "${rootProject.projectDir}/scripts/publish-module.gradle.kts")
