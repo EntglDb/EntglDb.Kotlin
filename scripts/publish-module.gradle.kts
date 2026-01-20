@@ -48,9 +48,9 @@ afterEvaluate {
         repositories {
             maven {
                 name = "OSSRH"
-                val releasesRepoUrl = "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC"
-                val snapshotsRepoUrl = "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC"
-                url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+                // New Sonatype Central Portal uses unified endpoint for both releases and snapshots
+                val repoUrl = "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC"
+                url = uri(repoUrl)
                 
                 credentials {
                     username = findProperty("ossrhUsername") as String? ?: System.getenv("OSSRH_USERNAME")
