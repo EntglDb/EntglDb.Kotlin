@@ -4,6 +4,7 @@ plugins {
     id("com.google.protobuf")
     kotlin("plugin.serialization")
     id("com.vanniktech.maven.publish")
+    id("org.jetbrains.dokka")
 }
 
 android {
@@ -26,6 +27,14 @@ android {
     }
 
 
+}
+
+tasks.withType<org.jetbrains.dokka.gradle.DokkaTaskPartial>().configureEach {
+    dokkaSourceSets.configureEach {
+        jdkVersion.set(17)
+        suppressInheritedMembers.set(false)
+        suppressObviousFunctions.set(true)
+    }
 }
 
 dependencies {
