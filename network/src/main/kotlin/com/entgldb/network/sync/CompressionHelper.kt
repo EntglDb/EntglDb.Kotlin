@@ -9,8 +9,9 @@ object CompressionHelper {
     const val THRESHOLD = 1024
     
     // Using pure Java Brotli decoder for Android compatibility
-    // Note: org.brotli:dec only supports decompression
-    val isBrotliSupported: Boolean = true
+    // Note: org.brotli:dec only supports decompression, not compression
+    // Setting to false to prevent compression negotiation
+    val isBrotliSupported: Boolean = false
 
     @Throws(IOException::class)
     fun decompress(data: ByteArray): ByteArray {
@@ -24,8 +25,7 @@ object CompressionHelper {
     @Throws(IOException::class)
     fun compress(data: ByteArray): ByteArray {
         // org.brotli:dec doesn't support compression
-        // For now, return uncompressed data
-        // TODO: Consider adding a compression library that supports both Android and compression
+        // Return uncompressed data since isBrotliSupported is false
         return data 
     }
 }
