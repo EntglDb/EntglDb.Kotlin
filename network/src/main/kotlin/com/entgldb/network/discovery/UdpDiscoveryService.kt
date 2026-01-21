@@ -16,12 +16,16 @@ import java.util.concurrent.ConcurrentHashMap
  * Provides UDP-based peer discovery for the EntglDb network.
  * Broadcasts presence beacons and listens for other nodes on the local network.
  */
+import com.entgldb.core.network.PeerNode
+
+// ... imports
+
 class UdpDiscoveryService(
     private val context: android.content.Context,
     private val nodeId: String,
     private var tcpPort: Int,
     private val useLocalhost: Boolean = false
-) {
+) : IDiscoveryService {
     companion object {
         private const val TAG = "UdpDiscovery"
         private const val DISCOVERY_PORT = 5000

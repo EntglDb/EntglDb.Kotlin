@@ -11,12 +11,12 @@ import kotlinx.coroutines.*
  * Implements gossip protocol for efficient data propagation.
  */
 class SyncOrchestrator(
-    private val discovery: UdpDiscoveryService,
+    private val discovery: com.entgldb.network.discovery.IDiscoveryService, // Use Interface
     private val client: TcpPeerClient,
     private val store: com.entgldb.core.storage.IPeerStore,
     private val nodeId: String,
     private val authToken: String
-) {
+) : ISyncOrchestrator {
     companion object {
         private const val TAG = "SyncOrchestrator"
         private const val SYNC_INTERVAL_MS = 10000L

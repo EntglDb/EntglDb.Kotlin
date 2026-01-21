@@ -31,4 +31,8 @@ interface IPeerStore {
 
     suspend fun getCollections(): List<String>
     suspend fun ensureIndex(collection: String, propertyPath: String)
+
+    suspend fun getRemotePeers(): List<com.entgldb.core.network.PeerNode>
+    suspend fun saveRemotePeer(peer: com.entgldb.core.network.PeerNode)
+    suspend fun removeRemotePeer(nodeId: String)
 }

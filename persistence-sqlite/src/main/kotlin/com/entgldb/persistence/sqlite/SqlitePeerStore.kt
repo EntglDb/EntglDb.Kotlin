@@ -295,7 +295,43 @@ class SqlitePeerStore(
         return OplogEntry(collection, key, operation, payload, HlcTimestamp(hlcWall, hlcLogic, hlcNode))
     }
 
-    private class DbHelper(context: Context, name: String) : SQLiteOpenHelper(context, name, null, 1) {
+    override suspend fun getRemotePeers(): List<com.entgldb.core.network.PeerNode> = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.rawQuery("SELECT NodeId, Address, Type, LastSeen FROM RemotePeers WHERE IsEnabled = 1", null)
+        val result = mutableListOf<com.entgldb.core.network.PeerNode>()
+        cursor.use {
+            while (it.moveToNext()) {
+                val nodeId = it.getString(0)
+                val address = it.getString(1)
+                val type = com.entgldb.core.network.PeerType.values()[it.getInt(2)]
+                val lastSeen = it.getLong(3)
+                result.add(com.entgldb.core.network.PeerNode(nodeId, address, lastSeen, type))
+            }
+        }
+        return@withContext result
+    }
+
+    override suspend fun saveRemotePeer(peer: com.entgldb.core.network.PeerNode) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("NodeId", peer.nodeId)
+            put("Address", peer.address)
+            put("Type", peer.type.ordinal)
+            put("LastSeen", peer.lastSeen)
+            put("IsEnabled", 1)
+        }
+        db.replace("RemotePeers", null, values)
+        // replace() is INSERT OR REPLACE
+        // If we want ON CONFLICT UPDATE specific columns only, we need raw SQL, but replace works fine here mostly.
+    }
+
+    override suspend fun removeRemotePeer(nodeId: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.delete("RemotePeers", "NodeId = ?", arrayOf(nodeId))
+        return@withContext 
+    }
+
+    private class DbHelper(context: Context, name: String) : SQLiteOpenHelper(context, name, null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
             // db.enableWriteAheadLogging() is handled in onConfigure
             // Do not run PRAGMA journal_mode via execSQL here as it returns a result and confuses some runners
@@ -325,10 +361,27 @@ class SqlitePeerStore(
                 )
             """)
             db.execSQL("CREATE INDEX IF NOT EXISTS IDX_Oplog_HlcWall ON Oplog(HlcWall);")
+
+            createRemotePeersTable(db)
         }
 
-        override fun onUpgrade(db: SQLiteDatabase?, oldVersion: Int, newVersion: Int) {
-            // Drop and recreate in demo
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) {
+                createRemotePeersTable(db)
+            }
+        }
+        
+        private fun createRemotePeersTable(db: SQLiteDatabase) {
+             db.execSQL("""
+                CREATE TABLE IF NOT EXISTS RemotePeers (
+                    NodeId TEXT PRIMARY KEY,
+                    Address TEXT NOT NULL,
+                    Type INTEGER NOT NULL,
+                    LastSeen INTEGER NOT NULL,
+                    OAuth2Json TEXT,
+                    IsEnabled INTEGER NOT NULL
+                )
+            """)
         }
         
         override fun onConfigure(db: SQLiteDatabase) {

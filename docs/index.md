@@ -4,22 +4,58 @@ layout: default
 
 # EntglDb Kotlin Documentation
 
-Welcome to the documentation for **EntglDb Kotlin**, a decentralized, offline-first peer-to-peer database for Android.
+**EntglDb** is a decentralized, offline-first peer-to-peer database. This repository contains the **Kotlin** implementation, primarily designed for **Android** (but supports JVM).
 
-## Active Versions
+## Installation
 
-*   [**v0.7.0 (Latest)**](https://www.entgldb.com/docs/v0.7.0) - *Hosted on EntglDb.com*
-*   [v0.2.0-alpha](v0.2.0/getting-started.html) - Android Robustness (Foreground Service), Recursive Merge, and API Reference.
-*   [v0.1.0-alpha](v0.1.0/getting-started.html) - Initial alpha release with Network, Persistence, and Security modules.
+Add the packages to your `build.gradle.kts`:
 
-## Features
+```kotlin
+implementation("com.entgldb:core:0.8.0")
+implementation("com.entgldb:persistence-sqlite:0.8.0")
+implementation("com.entgldb:network:0.8.0")
+```
 
-*   **Peer-to-Peer Sync**: Automatic discovery and synchronization between devices.
-*   **Offline-First**: Local SQLite storage with eventual consistency.
-*   **Secure**: ECDH key exchange and AES-256 encryption.
-*   **Cross-Platform**: Compatible with EntglDb.Net.
+## Getting Started
+
+### 1. Initialize
+
+```kotlin
+// Android Context required for SqlitePeerStore
+val store = SqlitePeerStore(context, "my-db")
+val node = EntglDbNode(store)
+val discovery = UdpDiscoveryService(context, node.nodeId, 25000)
+val server = TcpSyncServer(node.nodeId, 25000, null, store)
+
+// Start services
+server.start()
+discovery.start()
+```
+
+### 2. Save Data
+
+```kotlin
+val doc = Document.create("todos", "todo-1", 
+    JsonObject(mapOf("title" to JsonPrimitive("Buy Milk")))
+)
+store.saveDocument(doc)
+```
+
+### 3. Subscribe to Changes
+
+```kotlin
+scope.launch {
+    store.changesApplied.collect { collections ->
+        println("Collections changed: $collections")
+    }
+}
+```
+
+## Dynamic Reconfiguration (v0.8.0)
+
+See [Dynamic Reconfiguration](https://github.com/EntglDb/EntglDb.Net/blob/main/docs/dynamic-reconfiguration.md) in the main documentation.
 
 ## Links
 
+*   [**Central Documentation**](https://github.com/EntglDb/EntglDb.Net/tree/main/docs) - Architecture, Protocol, and Concepts.
 *   [GitHub Repository](https://github.com/EntglDb/EntglDb.Kotlin)
-*   [Maven Central](https://search.maven.org/artifact/com.entgldb/core)

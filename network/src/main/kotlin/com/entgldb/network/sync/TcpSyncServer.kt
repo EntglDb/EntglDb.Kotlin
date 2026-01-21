@@ -15,10 +15,11 @@ import java.net.Socket
  * TCP server accepting incoming sync connections from peers.
  */
 class TcpSyncServer(
-    private val nodeId: String,
-    private val port: Int,
+    private var nodeId: String,
+    private var port: Int,
     private val handshakeService: IPeerHandshakeService?,
-    private val store: com.entgldb.core.storage.IPeerStore
+    private val store: com.entgldb.core.storage.IPeerStore,
+    private val configProvider: com.entgldb.network.config.IPeerNodeConfigurationProvider? = null
 ) {
     companion object {
         private const val TAG = "TcpSyncServer"
@@ -27,6 +28,17 @@ class TcpSyncServer(
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var configSubscription: (() -> Unit)? = null
+
+    init {
+        configSubscription = configProvider?.subscribe { config ->
+            Log.i(TAG, "Configuration changed. Restarting TCP server.")
+            stop()
+            port = config.tcpPort
+            nodeId = config.nodeId
+            start()
+        }
+    }
 
     val listeningPort: Int
         get() = serverSocket?.localPort ?: 0
@@ -66,8 +78,16 @@ class TcpSyncServer(
         serverJob = null
         serverSocket?.close()
         serverSocket = null
-        scope.cancel()
+        // scope.cancel() // Do not cancel the scope if we want to restart, or we must recreate it.
+        // If we want to fully shut down, we need a destroy() method.
+        // For now, let's just cancel the job.
         Log.i(TAG, "TCP Sync Server stopped")
+    }
+
+    fun destroy() {
+        stop()
+        configSubscription?.invoke()
+        scope.cancel()
     }
 
     private suspend fun handleClient(socket: Socket) {
