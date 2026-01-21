@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     kotlin("plugin.serialization")
     id("com.vanniktech.maven.publish")
+    id("org.jetbrains.dokka")
 }
 
 android {
@@ -28,6 +29,14 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+tasks.withType<org.jetbrains.dokka.gradle.DokkaTaskPartial>().configureEach {
+    dokkaSourceSets.configureEach {
+        jdkVersion.set(17)
+        suppressInheritedMembers.set(false)
+        suppressObviousFunctions.set(true)
     }
 }
 
