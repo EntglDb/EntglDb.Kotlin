@@ -1,9 +1,10 @@
 plugins {
-    id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+    id("org.jetbrains.kotlin.android") version "2.3.0" apply false
     kotlin("plugin.serialization") version "1.9.22" apply false
-    id("com.android.library") version "8.2.2" apply false
-    id("com.google.protobuf") version "0.9.4" apply false
-    id("com.vanniktech.maven.publish") version "0.30.0" apply false
+    id("com.android.library") version "9.0.0" apply false
+    id("com.google.protobuf") version "0.9.6" apply false
+    id("com.vanniktech.maven.publish") version "0.36.0" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.0" apply false
 }
 
 allprojects {

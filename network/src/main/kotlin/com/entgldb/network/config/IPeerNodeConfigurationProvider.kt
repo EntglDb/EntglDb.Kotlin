@@ -1,7 +1,5 @@
 package com.entgldb.network.config
 
-import com.entgldb.network.models.PeerNode
-
 /**
  * Provides configuration for the peer node.
  */

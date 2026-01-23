@@ -1,7 +1,5 @@
 package com.entgldb.network.discovery
 
-import android.util.Log
-import com.entgldb.network.models.PeerNode
 import kotlinx.coroutines.*
 import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.Serializable
@@ -17,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Broadcasts presence beacons and listens for other nodes on the local network.
  */
 import com.entgldb.core.network.PeerNode
+import kotlinx.serialization.InternalSerializationApi
 
 // ... imports
 
@@ -28,6 +27,7 @@ class UdpDiscoveryService(
 ) : IDiscoveryService {
     companion object {
         private const val TAG = "UdpDiscovery"
+        private val logger = mu.KotlinLogging.logger {}
         private const val DISCOVERY_PORT = 5000
         private const val BROADCAST_INTERVAL_MS = 5000L
         private const val CLEANUP_INTERVAL_MS = 10000L
@@ -46,7 +46,7 @@ class UdpDiscoveryService(
      * Starts the discovery service, initiating listener, broadcaster, and cleanup tasks.
      * Can be called to resume after pause().
      */
-    fun start() {
+    override fun start() {
         if (discoveryJob != null && discoveryJob?.isActive == true) return
         
         discoveryJob = scope.launch {
@@ -55,7 +55,7 @@ class UdpDiscoveryService(
             launch { cleanupExpiredPeers() }
         }
         
-        Log.i(TAG, "UDP Discovery started for node: $nodeId")
+        logger.info { "UDP Discovery started for node: $nodeId" }
     }
 
     /**
@@ -64,7 +64,7 @@ class UdpDiscoveryService(
     fun pause() {
         discoveryJob?.cancel()
         discoveryJob = null
-        Log.i(TAG, "UDP Discovery paused")
+        logger.info { "UDP Discovery paused" }
     }
 
     /**
@@ -77,24 +77,26 @@ class UdpDiscoveryService(
     /**
      * Stops the discovery service permanently.
      */
-    fun stop() {
+    override fun stop() {
         pause()
         scope.cancel()
-        Log.i(TAG, "UDP Discovery stopped")
+        logger.info { "UDP Discovery stopped" }
     }
 
     /**
      * Gets the list of currently active peers.
      */
-    fun getActivePeers(): List<PeerNode> = activePeers.values.toList()
+    override fun getActivePeers(): List<PeerNode> = activePeers.values.toList()
 
+    @OptIn(InternalSerializationApi::class)
     private suspend fun listenForBeacons() {
         withContext(Dispatchers.IO) {
             val socket = DatagramSocket(DISCOVERY_PORT).apply {
                 reuseAddress = true
             }
             
-            Log.i(TAG, "UDP Discovery listening on port $DISCOVERY_PORT")
+            
+            logger.info { "UDP Discovery listening on port $DISCOVERY_PORT" }
             
             try {
                 val buffer = ByteArray(1024)
@@ -103,7 +105,7 @@ class UdpDiscoveryService(
                     socket.receive(packet)
                     
                     val json = String(packet.data, 0, packet.length)
-                    Log.v(TAG, "Received beacon raw: $json from ${packet.address}") 
+                    logger.debug { "Received beacon raw: $json from ${packet.address}" } 
                     
                     try {
                         val beacon = com.entgldb.core.common.JsonHelpers.json.decodeFromString<DiscoveryBeacon>(json)
@@ -111,12 +113,12 @@ class UdpDiscoveryService(
                             handleBeacon(beacon, packet.address)
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to parse beacon from ${packet.address}. Json: $json. Error: ${e.message}")
+                        logger.warn { "Failed to parse beacon from ${packet.address}. Json: $json. Error: ${e.message}" }
                     }
                 }
             } catch (e: Exception) {
                 if (coroutineContext.isActive) {
-                    Log.e(TAG, "UDP Listener error", e)
+                    logger.error(e) { "UDP Listener error" }
                 }
             } finally {
                 socket.close()
@@ -124,6 +126,7 @@ class UdpDiscoveryService(
         }
     }
 
+    @OptIn(InternalSerializationApi::class)
     private suspend fun broadcastBeacons() {
         withContext(Dispatchers.IO) {
             val socket = DatagramSocket().apply {
@@ -134,7 +137,9 @@ class UdpDiscoveryService(
             val json = com.entgldb.core.common.JsonHelpers.json.encodeToString(beacon)
             val bytes = json.toByteArray()
             
-            Log.i(TAG, "UDP Broadcasting started for $nodeId")
+
+            
+            logger.info { "UDP Broadcasting started for $nodeId" }
             
             try {
                 while (coroutineContext.isActive) {
@@ -142,7 +147,9 @@ class UdpDiscoveryService(
                     val broadcastAddress = getBroadcastAddress() ?: InetAddress.getByName("255.255.255.255")
                     val packet = DatagramPacket(bytes, bytes.size, broadcastAddress, DISCOVERY_PORT)
 
-                    Log.v(TAG, "Broadcasting beacon to ${broadcastAddress.hostAddress}: $json")
+
+
+                    logger.debug { "Broadcasting beacon to ${broadcastAddress.hostAddress}: $json" }
                     socket.send(packet)
                     
                     // Fallback removed as requested implicitly by reverting to "back" state,
@@ -152,7 +159,7 @@ class UdpDiscoveryService(
                 }
             } catch (e: Exception) {
                 if (coroutineContext.isActive) {
-                    Log.e(TAG, "UDP Broadcast error", e)
+                    logger.error(e) { "UDP Broadcast error" }
                 }
             } finally {
                 socket.close()
@@ -175,12 +182,13 @@ class UdpDiscoveryService(
             
             expired.forEach { id ->
                 activePeers.remove(id)?.let { peer ->
-                    Log.i(TAG, "Peer expired: ${peer.nodeId} at ${peer.address}")
+                    logger.info { "Peer expired: ${peer.nodeId} at ${peer.address}" }
                 }
             }
         }
     }
 
+    @OptIn(InternalSerializationApi::class)
     private fun handleBeacon(beacon: DiscoveryBeacon, address: InetAddress) {
         val targetAddress = if (useLocalhost) {
             InetAddress.getLoopbackAddress()
@@ -199,11 +207,11 @@ class UdpDiscoveryService(
         if (!wasNew) {
             activePeers[beacon.nodeId] = peer // Update timestamp
         } else {
-            Log.i(TAG, "Peer discovered: ${peer.nodeId} at ${peer.address}")
+            logger.info { "Peer discovered: ${peer.nodeId} at ${peer.address}" }
         }
     }
 
-    @Serializable
+    @InternalSerializationApi @Serializable
     private data class DiscoveryBeacon(
         @kotlinx.serialization.SerialName("node_id") val nodeId: String,
         @kotlinx.serialization.SerialName("tcp_port") val tcpPort: Int
@@ -220,8 +228,9 @@ class UdpDiscoveryService(
                 quizzes[k] = (broadcast shr k * 8 and 0xFF).toByte()
             }
             return InetAddress.getByAddress(quizzes)
+
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to calculate broadcast address: ${e.message}")
+            logger.warn { "Failed to calculate broadcast address: ${e.message}" }
             return null
         }
     }

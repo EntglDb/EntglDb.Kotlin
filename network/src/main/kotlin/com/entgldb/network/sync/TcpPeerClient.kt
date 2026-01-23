@@ -1,6 +1,5 @@
 package com.entgldb.network.sync
 
-import android.util.Log
 import com.entgldb.network.models.NodeAddress
 import com.entgldb.network.security.IPeerHandshakeService
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +16,7 @@ class TcpPeerClient(
 ) {
     companion object {
         private const val TAG = "TcpPeerClient"
+        private val logger = mu.KotlinLogging.logger {}
         private const val CONNECT_TIMEOUT_MS = 5000
     }
 
@@ -40,12 +40,12 @@ class TcpPeerClient(
                 val cipherState = handshakeService?.performHandshake(input, output, isInitiator = true)
 
                 if (handshakeService != null && cipherState == null) {
-                    Log.w(TAG, "Handshake failed with $address")
+                    logger.warn { "Handshake failed with $address" }
                     socket.close()
                     return@withContext null
                 }
 
-                Log.i(TAG, "Connected to peer at $address")
+                logger.info { "Connected to peer at $address" }
                 
                 SecureChannel(
                     input, 
@@ -55,7 +55,7 @@ class TcpPeerClient(
                 )
 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to connect to $address", e)
+                logger.error(e) { "Failed to connect to $address" }
                 null
             }
         }

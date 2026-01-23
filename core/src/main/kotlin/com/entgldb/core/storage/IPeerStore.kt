@@ -16,6 +16,12 @@ interface IPeerStore {
     suspend fun getLatestTimestamp(): HlcTimestamp
     suspend fun applyRemoteChanges(changes: List<OplogEntry>)
 
+    // VectorClock & Sync v2 methods
+    suspend fun getVectorClock(): com.entgldb.core.VectorClock
+    suspend fun getOplogForNodeAfter(nodeId: String, timestamp: HlcTimestamp): List<OplogEntry>
+    suspend fun getLastEntryHash(nodeId: String? = null): String
+    suspend fun getChainRange(nodeId: String, startTimestamp: HlcTimestamp, count: Int): List<OplogEntry>
+
     suspend fun applyBatch(documents: List<Document>, oplogEntries: List<OplogEntry>)
 
     suspend fun queryDocuments(

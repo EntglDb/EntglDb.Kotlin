@@ -1,6 +1,5 @@
 package com.entgldb.network.sync
 
-import android.util.Log
 import com.entgldb.network.security.IPeerHandshakeService
 import com.entgldb.network.proto.MessageType
 import com.entgldb.network.proto.HandshakeRequest
@@ -23,6 +22,7 @@ class TcpSyncServer(
 ) {
     companion object {
         private const val TAG = "TcpSyncServer"
+        private val logger = mu.KotlinLogging.logger {}
     }
 
     private var serverSocket: ServerSocket? = null
@@ -32,7 +32,7 @@ class TcpSyncServer(
 
     init {
         configSubscription = configProvider?.subscribe { config ->
-            Log.i(TAG, "Configuration changed. Restarting TCP server.")
+            logger.info { "Configuration changed. Restarting TCP server." }
             stop()
             port = config.tcpPort
             nodeId = config.nodeId
@@ -53,7 +53,7 @@ class TcpSyncServer(
         if (serverSocket != null) return
 
         serverSocket = ServerSocket(port).also { socket ->
-            Log.i(TAG, "TCP Sync Server started on port ${socket.localPort}")
+            logger.info { "TCP Sync Server started on port ${socket.localPort}" }
         }
 
         serverJob = scope.launch {
@@ -64,7 +64,7 @@ class TcpSyncServer(
                 }
             } catch (e: Exception) {
                 if (isActive) {
-                    Log.e(TAG, "Server accept error", e)
+                    logger.error(e) { "Server accept error" }
                 }
             }
         }
@@ -81,7 +81,7 @@ class TcpSyncServer(
         // scope.cancel() // Do not cancel the scope if we want to restart, or we must recreate it.
         // If we want to fully shut down, we need a destroy() method.
         // For now, let's just cancel the job.
-        Log.i(TAG, "TCP Sync Server stopped")
+        logger.info { "TCP Sync Server stopped" }
     }
 
     fun destroy() {
@@ -101,11 +101,11 @@ class TcpSyncServer(
                     val cipherState = handshakeService?.performHandshake(input, output, isInitiator = false)
 
                     if (handshakeService != null && cipherState == null) {
-                        Log.w(TAG, "Handshake failed with ${client.inetAddress}")
+                        logger.warn { "Handshake failed with ${client.inetAddress}" }
                         return@use
                     }
 
-                    Log.i(TAG, "Client handshake complete: ${client.inetAddress}")
+                    logger.info { "Client handshake complete: ${client.inetAddress}" }
 
                     // Establish Secure Channel
                     val channel = SecureChannel(
@@ -124,7 +124,7 @@ class TcpSyncServer(
                             
                             if (type == MessageType.HandshakeReq) {
                                 val hReq = com.entgldb.network.proto.HandshakeRequest.parseFrom(payload)
-                                Log.d(TAG, "Received HandshakeReq from ${hReq.nodeId}")
+                                logger.debug { "Received HandshakeReq from ${hReq.nodeId}" }
                                 
                                 val hResBuilder = com.entgldb.network.proto.HandshakeResponse.newBuilder()
                                     .setNodeId(nodeId)
@@ -134,7 +134,7 @@ class TcpSyncServer(
                                 if (hReq.supportedCompressionList.contains("brotli") && CompressionHelper.isBrotliSupported) {
                                     hResBuilder.setSelectedCompression("brotli")
                                     channel.useCompression = true
-                                    Log.i(TAG, "Negotiated Brotli compression with ${hReq.nodeId}")
+                                    logger.info { "Negotiated Brotli compression with ${hReq.nodeId}" }
                                 }
                                 
                                 val hRes = hResBuilder.build()
@@ -147,17 +147,17 @@ class TcpSyncServer(
                                 val (resType, resMsg) = response
                                 channel.sendMessage(resType, resMsg as com.google.protobuf.MessageLite)
                             } else {
-                                Log.w(TAG, "Processor returned no response for $type")
+                                logger.warn { "Processor returned no response for $type" }
                             }
                             
                         } catch (e: java.io.EOFException) {
-                            Log.i(TAG, "Client disconnected: ${client.inetAddress}")
+                            logger.info { "Client disconnected: ${client.inetAddress}" }
                             break
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Client handler error", e)
+                logger.error(e) { "Client handler error" }
             }
         }
     }

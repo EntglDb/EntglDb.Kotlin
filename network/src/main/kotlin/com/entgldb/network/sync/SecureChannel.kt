@@ -1,7 +1,6 @@
 package com.entgldb.network.sync
 
-import com.entgldb.network.proto.SecureEnvelope
-import com.entgldb.network.proto.MessageType
+import EntglDb.Network.Proto.Sync
 import com.entgldb.network.security.CryptoHelper
 import com.google.protobuf.ByteString
 import com.google.protobuf.MessageLite
@@ -35,7 +34,7 @@ class SecureChannel(
     /**
      * Sends a message with proper framing and encryption.
      */
-    suspend fun sendMessage(type: MessageType, message: MessageLite) {
+    suspend fun sendMessage(type: Sync.MessageType, message: MessageLite) {
         withContext(Dispatchers.IO) {
             var finalType = type.number
             var payloadBytes = message.toByteArray()
@@ -68,14 +67,14 @@ class SecureChannel(
                 val tag = cipherWithTag.copyOfRange(cipherWithTag.size - tagLength, cipherWithTag.size)
                 val ciphertext = cipherWithTag.copyOfRange(0, cipherWithTag.size - tagLength)
 
-                val env = SecureEnvelope.newBuilder()
+                val env = Sync.SecureEnvelope.newBuilder()
                     .setCiphertext(ByteString.copyFrom(ciphertext))
                     .setNonce(ByteString.copyFrom(iv))
                     .setAuthTag(ByteString.copyFrom(tag))
                     .build()
 
                 payloadBytes = env.toByteArray()
-                finalType = MessageType.SecureEnv.number
+                finalType = Sync.MessageType.SecureEnv.number
                 compressionFlag = 0x00 // Outer envelope is not compressed
             }
 
@@ -99,7 +98,7 @@ class SecureChannel(
     /**
      * Reads a message, decrypts if necessary.
      */
-    suspend fun readMessage(): Pair<MessageType, ByteArray> {
+    suspend fun readMessage(): Pair<Sync.MessageType, ByteArray> {
         return withContext(Dispatchers.IO) {
             // Read Length (LE)
             val lenBuf = ByteArray(4)
@@ -118,12 +117,12 @@ class SecureChannel(
             var payload = ByteArray(length)
             readFully(payload)
 
-            var msgType = MessageType.forNumber(typeByte) ?: MessageType.Unknown
+            var msgType = Sync.MessageType.forNumber(typeByte) ?: Sync.MessageType.Unknown
 
-            if (msgType == MessageType.SecureEnv) {
+            if (msgType == Sync.MessageType.SecureEnv) {
                 if (decryptKey == null) throw IllegalStateException("Received encrypted message but no keys established")
 
-                val env = SecureEnvelope.parseFrom(payload)
+                val env = Sync.SecureEnvelope.parseFrom(payload)
                 
                 // Reconstruct for Java Decrypt: [IV] + [Ciphertext] + [Tag]
                 val iv = env.nonce.toByteArray()
@@ -142,7 +141,7 @@ class SecureChannel(
                 
                 val innerType = decrypted[0].toInt()
                 val innerComp = decrypted[1].toInt()
-                msgType = MessageType.forNumber(innerType) ?: MessageType.Unknown
+                msgType = Sync.MessageType.forNumber(innerType) ?: Sync.MessageType.Unknown
                 
                 val innerPayload = ByteArray(decrypted.size - 2)
                 System.arraycopy(decrypted, 2, innerPayload, 0, innerPayload.size)

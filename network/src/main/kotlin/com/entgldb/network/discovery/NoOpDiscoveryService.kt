@@ -1,6 +1,6 @@
 package com.entgldb.network.discovery
 
-import com.entgldb.network.models.PeerNode
+import com.entgldb.core.network.PeerNode
 
 /**
  * No-operation discovery service for server scenarios.

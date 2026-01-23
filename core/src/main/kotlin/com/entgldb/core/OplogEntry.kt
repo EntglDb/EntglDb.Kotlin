@@ -14,5 +14,7 @@ data class OplogEntry(
     val key: String,
     val operation: OperationType,
     val payload: JsonElement?,
-    val timestamp: HlcTimestamp
+    val timestamp: HlcTimestamp,
+    val hash: String = "",
+    val previousHash: String = ""
 )

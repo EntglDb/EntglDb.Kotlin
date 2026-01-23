@@ -30,29 +30,30 @@ object SqlTranslator {
     }
 
     private fun buildBinaryOp(op: String, property: String, value: Any?, args: MutableList<String>): String {
-        val fieldName = toSnakeCase(property)
-        // json_extract usage
-        val column = "json_extract(data, '$.$fieldName')"
+        // Use property name directly as JSON path key. Assumes properties are at root of JsonData.
+        val column = "json_extract(JsonData, '$.\"$property\"')"
         
         return when (value) {
             is Number -> "$column $op $value"
             is Boolean -> {
+                // SQLite has no boolean, uses 0/1. json_extract might return 0/1 or 'true'/'false' depending on storage?
+                // EntglDb stores as JSON text. json_extract returns values.
+                // If stored as true/false in JSON, sqlite extract might return them as text?
+                // Actually SQLite `json_extract` returns semantic values.
+                // Safest to compare against 1/0 if we store as such, or match flexible.
+                // Let's assume standard JSON boolean.
                 val boolVal = if (value) 1 else 0
-                "$column $op $boolVal"
+                "$column $op $boolVal" 
             }
             null -> {
                 if (op == "=") "$column IS NULL"
                 else if (op == "<>") "$column IS NOT NULL"
-                else "$column $op NULL" // Usually null comparisons yield null/false
+                else "$column $op NULL"
             }
             else -> {
                 args.add(value.toString())
                 "$column $op ?"
             }
         }
-    }
-
-    private fun toSnakeCase(str: String): String {
-        return str.replace(Regex("([a-z])([A-Z]+)"), "$1_$2").lowercase()
     }
 }

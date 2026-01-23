@@ -1,12 +1,11 @@
 package com.entgldb.network.sync
 
-import android.util.Log
+import EntglDb.Network.Proto.Sync
 import com.entgldb.core.HlcTimestamp
 import com.entgldb.core.OplogEntry
 import com.entgldb.core.OperationType
 import com.entgldb.core.common.JsonHelpers
 import com.entgldb.core.storage.IPeerStore
-import com.entgldb.network.proto.*
 import kotlinx.coroutines.flow.first
 
 class SyncMessageProcessor(
@@ -15,36 +14,41 @@ class SyncMessageProcessor(
 ) {
     companion object {
         private const val TAG = "SyncMessageProcessor"
+        private val logger = mu.KotlinLogging.logger {}
     }
 
-    suspend fun process(type: MessageType, payload: ByteArray): Pair<MessageType, Any>? {
+    suspend fun process(type: Sync.MessageType, payload: ByteArray): Pair<Sync.MessageType, Any>? {
         return when (type) {
-            MessageType.HandshakeReq -> {
+            Sync.MessageType.HandshakeReq -> {
                 // Handshake is handled by Server directly, but if it leaks here:
-                Log.w(TAG, "Unexpected HandshakeReq in processor")
+                logger.warn { "Unexpected HandshakeReq in processor" }
                 null
             }
-            MessageType.GetClockReq -> {
+            Sync. MessageType.GetClockReq -> {
                 val latest = store.getLatestTimestamp()
-                val res = ClockResponse.newBuilder()
+                val res = Sync.ClockResponse.newBuilder()
                     .setHlcWall(latest.physicalTime)
                     .setHlcLogic(latest.logicalCounter)
                     .setHlcNode(latest.nodeId)
                     .build()
-                Pair(MessageType.ClockRes, res)
+                Pair(Sync.MessageType.ClockRes, res)
             }
-            MessageType.PullChangesReq -> {
-                val req = PullChangesRequest.parseFrom(payload)
+            Sync.MessageType.PullChangesReq -> {
+                val req = Sync.PullChangesRequest.parseFrom(payload)
                 val since = HlcTimestamp(req.sinceWall, req.sinceLogic, req.sinceNode)
                 
-                Log.d(TAG, "Processing PullChanges since $since")
+
+                
+                logger.debug { "Processing PullChanges since $since" }
                 
                 val entries = store.getOplogAfter(since)
                 
-                val resBuilder = ChangeSetResponse.newBuilder()
+
+                
+                val resBuilder = Sync.ChangeSetResponse.newBuilder()
                 entries.forEach { entry ->
                     resBuilder.addEntries(
-                        ProtoOplogEntry.newBuilder()
+                        Sync.ProtoOplogEntry.newBuilder()
                             .setCollection(entry.collection)
                             .setKey(entry.key)
                             .setOperation(entry.operation.name)
@@ -57,11 +61,11 @@ class SyncMessageProcessor(
                 }
                 
                 // Also sending current max clock? Not explicitly in proto but implicit in entries.
-                Pair(MessageType.ChangeSetRes, resBuilder.build())
+                Pair(Sync.MessageType.ChangeSetRes, resBuilder.build())
             }
-            MessageType.PushChangesReq -> {
-                val req = PushChangesRequest.parseFrom(payload)
-                Log.d(TAG, "Processing PushChanges with ${req.entriesCount} entries")
+            Sync.MessageType.PushChangesReq -> {
+                val req = Sync.PushChangesRequest.parseFrom(payload)
+                logger.debug { "Processing PushChanges with ${req.entriesCount} entries" }
                 
                 val entries = req.entriesList.map { proto ->
                     OplogEntry(
@@ -75,11 +79,11 @@ class SyncMessageProcessor(
                 
                 store.applyRemoteChanges(entries)
                 
-                val res = AckResponse.newBuilder().setSuccess(true).build()
-                Pair(MessageType.AckRes, res)
+                val res = Sync.AckResponse.newBuilder().setSuccess(true).build()
+                Pair(Sync.MessageType.AckRes, res)
             }
             else -> {
-                Log.w(TAG, "Unknown message type: $type")
+                logger.warn { "Unknown message type: $type" }
                 null
             }
         }
