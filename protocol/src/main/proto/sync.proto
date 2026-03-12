@@ -8,12 +8,14 @@ message HandshakeRequest {
   string node_id = 1;
   string auth_token = 2;
   repeated string supported_compression = 3; // v4
+  repeated string interesting_collections = 4; // v5
 }
 
 message HandshakeResponse {
   string node_id = 1;
   bool accepted = 2;
   string selected_compression = 3; // v4
+  repeated string interesting_collections = 4; // v5
 }
 
 message GetClockRequest {
@@ -42,6 +44,7 @@ message PullChangesRequest {
   int64 since_wall = 1;
   int32 since_logic = 2;
   string since_node = 3;
+  repeated string collections = 4; // v5: Filter by collection
 }
 
 message ChangeSetResponse {
@@ -52,17 +55,19 @@ message PushChangesRequest {
   repeated ProtoOplogEntry entries = 1;
 }
 
-message GetChainRangeRequest {
-  string start_hash = 1;
-  string end_hash = 2;
+message GetChainRangeRequest { 
+  string start_hash = 1; 
+  string end_hash = 2; 
 }
 
-message ChainRangeResponse {
-  repeated ProtoOplogEntry entries = 1;
+message ChainRangeResponse { 
+  repeated ProtoOplogEntry entries = 1; 
+  bool snapshot_required = 2;
 }
 
 message AckResponse {
   bool success = 1;
+  bool snapshot_required = 2;
 }
 
 message ProtoOplogEntry {
@@ -75,6 +80,14 @@ message ProtoOplogEntry {
   string hlc_node = 7;
   string hash = 8;
   string previous_hash = 9;
+}
+
+message GetSnapshotRequest {
+}
+
+message SnapshotChunk {
+    bytes data = 1;
+    bool is_last = 2;
 }
 
 // Enum for wire framing (1 byte)
@@ -93,6 +106,8 @@ enum MessageType {
   ChainRangeRes = 11;
   GetVectorClockReq = 12;
   VectorClockRes = 13;
+  GetSnapshotReq = 14;
+  SnapshotChunkMsg = 15;
 }
 
 message SecureEnvelope {

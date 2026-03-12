@@ -1,51 +1,54 @@
-# EntglDb - Kotlin Multiplatform Implementation
+# EntglDb.Kotlin — Student Project Scaffold
 
-A decentralized, offline-first peer-to-peer database for Kotlin/JVM and Android.
+Kotlin implementation of EntglDb, the peer-to-peer data synchronization middleware.
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/EntglDb/EntglDb.Kotlin/releases)
+> **Questo repository è uno scaffold vuoto** per il progetto universitario.
+> L'implementazione di riferimento è `EntglDb.Net` (v1.0.0, .NET 8/10).
 
 ## Project Structure (Gradle Multi-Project)
 
 ```
-├── core/                - Core database engine (KMP)
-├── persistence-sqlite/  - SQLite storage adapter
-├── network/             - P2P networking layer
-├── protocol/            - Protocol Buffers definitions
-└── sample-android/      - Android demo app
+├── core/                - Core engine: VectorClock, HLC, Oplog, Conflict Resolution
+├── persistence-sqlite/  - SQLite storage adapter (Android SQLite KTX)
+├── network/             - P2P networking layer (Ktor, TCP + UDP discovery)
+├── protocol/            - Protocol Buffers (sync.proto — already compiled)
+└── app/                 - Android sample application (Jetpack Compose)
 ```
 
-## Development
+## Prerequisites
 
-### Prerequisites
-- JDK 17+
-- Android SDK (for Android module)
+- JDK 21+
+- Android SDK (API 24+)
+- Android Studio Meerkat or newer
 
-### Build
+## Build
+
 ```bash
 ./gradlew build
 ```
 
-### Testing
-```bash
-./gradlew test
-```
-
-### Run Android Sample
-```bash
-./gradlew :sample-android:installDebug
-```
-
-## Architecture
-
-This is a **pure Kotlin rewrite** using Kotlin Multiplatform for:
-- JVM servers
-- Android apps  
-
 ## Protocol Compatibility
 
-Protocol Version: **v4**
-Compatible with: EntglDb.NET v0.7.0
-Features: Brotli compression, Secure Handshake, Gossip.
+Protocol Version: **v5**
+Compatible with: EntglDb.Net v1.0.0
+Features: Brotli compression, Secure Handshake (Noise), Gossip, Interest-Aware Sync, Snapshot.
+
+### Protocol Messages (`proto/sync.proto`)
+
+Il protocollo di rete è già definito in `protocol/src/main/proto/sync.proto`.
+La compilazione Protobuf è gestita automaticamente da Gradle — non modificare il file a meno che
+non si stia estendendo il protocollo.
+
+## Reference Implementation
+
+| Concetto | Dove guardare in EntglDb.Net |
+|---|---|
+| VectorClock, HLC | `src/EntglDb.Core/VectorClock.cs`, `HlcTimestamp.cs` |
+| OplogEntry, hash chain | `src/EntglDb.Core/OplogEntry.cs` |
+| Conflict Resolution (LWW / Merge) | `src/EntglDb.Core/sync/` |
+| TCP networking, handshake | `src/EntglDb.Network/sync/TcpPeerClient.cs` |
+| UDP Discovery | `src/EntglDb.Network/discovery/` |
+| Snapshot / Gap Recovery | `src/EntglDb.Network/sync/SyncOrchestrator.cs` |
 
 ## License
 

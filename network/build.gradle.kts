@@ -12,6 +12,10 @@ configure<LibraryExtension>{
     compileSdk = 36
     namespace = "com.entgldb.network"
 
+    defaultConfig{
+        minSdk = 24
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -33,6 +37,7 @@ dependencies {
 
     // Brotli compression - use pure Java implementation for Android compatibility
     implementation("org.brotli:dec:0.1.2")
+// optional
 
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
